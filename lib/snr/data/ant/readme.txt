@@ -1,3 +1,10 @@
+UAN EXPORT FOR REMCOM WIRELESS INSITE:
+  Antenna gain patterns can be exported to Remcom Wireless InSite's .uan format
+  for use in propagation modeling. Use either:
+    - MATLAB: antenna_gain_to_uan('TRM55971.00', 'NONE', 'L1', 'RHCP')
+    - Python: python tools/antenna_gain_to_uan.py TRM55971.00 NONE L1 RHCP
+  Pre-converted examples: TRM29659.00_L1_RHCP.uan, TRM55971.00_L1_RHCP.uan
+
 The "profile" subdirectory is the only one input by the user.  The "densemap" and "sphharm" subdirectories are produced by the routine snr_setup_ant_gain_preload.m
 
 If the antenna code includes the forward slash character ("/"), that character is replaced for "_" in the filename -- only; the antenna model code input to the simulator remains unaltered, as it affects the antenna phase-center vector offsets.
