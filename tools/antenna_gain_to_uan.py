@@ -62,7 +62,7 @@ def load_gain_profile(filepath):
 
 def write_uan(filepath, theta, phi, gain_db, freq_hz, polarization='RHCP'):
     """
-    Write Remcom UAN format.
+    Write Remcom Wireless InSite UAN format.
     For circular polarization (RHCP/LHCP), split gain -3dB between theta and phi.
     """
     import numpy as np
@@ -82,35 +82,45 @@ def write_uan(filepath, theta, phi, gain_db, freq_hz, polarization='RHCP'):
     if np.isnan(phi_inc) or phi_inc <= 0:
         phi_inc = 5.0
 
+    # maximum_gain: peak gain in dBi (max of theta/phi components)
+    maximum_gain = float(np.nanmax(np.maximum(gain_theta_db, gain_phi_db)))
+
+    # phi_max: 355 when phi_inc=5 (0,5,...,355) to match Wireless InSite convention
+    phi_max = 360 - phi_inc if phi_inc > 0 else 360
+
     with open(filepath, 'w') as f:
-        f.write('theta_min 0\n')
-        f.write('theta_max 180\n')
-        f.write(f'theta_inc {theta_inc}\n')
-        f.write('phi_min 0\n')
-        f.write('phi_max 360\n')
-        f.write(f'phi_inc {phi_inc}\n')
+        f.write('begin_<parameters> \n')
+        f.write('format free\n')
+        f.write(f'phi_min 0.000000\n')
+        f.write(f'phi_max {phi_max:.6f}\n')
+        f.write(f'phi_inc {phi_inc:.6f}\n')
+        f.write('theta_min 0.000000\n')
+        f.write('theta_max 180.0000\n')
+        f.write(f'theta_inc {theta_inc:.6f}\n')
         f.write('complex\n')
+        f.write('mag_phase\n')
         f.write('pattern gain\n')
         f.write('magnitude dB\n')
+        f.write(f'maximum_gain {maximum_gain:.6f}\n')
         f.write('phase degrees\n')
         f.write('direction degrees\n')
-        f.write(f'frequencyHz {freq_hz}\n')
         f.write('polarization theta_phi\n')
-        f.write('NetInputPower 1\n')
-        f.write('ReferencePoint 0 0 0\n')
-        f.write('# theta phi G_theta_dB G_phi_dB phase_theta_deg phase_phi_deg\n')
+        f.write('end_<parameters>\n')
         for i in range(len(theta)):
-            f.write(f'{theta[i]} {phi[i]} {gain_theta_db[i]} {gain_phi_db[i]} '
-                    f'{phase_theta[i]} {phase_phi[i]}\n')
+            f.write(f'{theta[i]:.6f}  {phi[i]:.6f}  {gain_theta_db[i]:.6f}  '
+                    f'{gain_phi_db[i]:.6f}  {phase_theta[i]:.6f}  {phase_phi[i]:.6f}\n')
 
 
 def expand_azimuth_symmetric(theta_deg, gain_db, theta_step=5, phi_step=5):
-    """Expand 1D (azimuth-symmetric) pattern to full theta-phi grid."""
+    """Expand 1D (azimuth-symmetric) pattern to full theta-phi grid.
+    Order: phi varies first (0,5,...,355) then theta, to match UAN convention.
+    """
     import numpy as np
 
     theta_grid = np.arange(0, 181, theta_step)
-    phi_grid = np.arange(0, 360, phi_step)
-    theta_mesh, phi_mesh = np.meshgrid(theta_grid, phi_grid)
+    # phi 0,5,...,355 to match Wireless InSite UAN phi_max convention
+    phi_grid = np.arange(0, 360 - phi_step + 1e-9, phi_step)
+    phi_mesh, theta_mesh = np.meshgrid(phi_grid, theta_grid)
     theta_flat = theta_mesh.ravel()
     phi_flat = phi_mesh.ravel()
 

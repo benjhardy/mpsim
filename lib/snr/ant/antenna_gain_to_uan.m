@@ -57,10 +57,11 @@ function antenna_gain_to_uan (model, radome, freq_name, polar, varargin)
     gain_db = profile.gain_db;
 
     % For 2-column (azimuth-symmetric) data, expand to full theta-phi grid
+    % Order: phi varies first (0,5,...,355) then theta, to match UAN convention
     if isscalar(unique(phi_deg)) || numel(unique(phi_deg)) < 3
-        [theta_grid, phi_grid] = meshgrid(...
-            linspace(0, 180, 37), ...   % theta: 5 deg steps
-            linspace(0, 360, 73));      % phi: 5 deg steps
+        theta_domain = linspace(0, 180, 37);
+        phi_domain = linspace(0, 355, 72);
+        [phi_grid, theta_grid] = meshgrid(phi_domain, theta_domain);
         theta_grid = theta_grid(:);
         phi_grid = phi_grid(:);
         % Interpolate gain (azimuth-independent)
@@ -95,7 +96,7 @@ function antenna_gain_to_uan (model, radome, freq_name, polar, varargin)
 
     write_uan_file(output_path, theta_grid, phi_grid, ...
         gain_theta_db, gain_phi_db, phase_theta_deg, phase_phi_deg, ...
-        freq_hz, theta_inc, phi_inc);
+        theta_inc, phi_inc);
 
     fprintf('Wrote: %s\n', output_path);
 end
@@ -122,8 +123,8 @@ function [theta_grid, phi_grid, gain_grid] = expand_profile_to_grid(profile)
     phi_deg = mod(profile.azim, 360);
 
     theta_domain = linspace(0, 180, 37);
-    phi_domain = linspace(0, 360, 73);
-    [theta_grid, phi_grid] = meshgrid(theta_domain, phi_domain);
+    phi_domain = linspace(0, 355, 72);
+    [phi_grid, theta_grid] = meshgrid(phi_domain, theta_domain);
     theta_grid = theta_grid(:);
     phi_grid = phi_grid(:);
 
@@ -133,39 +134,38 @@ function [theta_grid, phi_grid, gain_grid] = expand_profile_to_grid(profile)
 end
 
 function write_uan_file(filepath, theta, phi, g_theta, g_phi, ...
-    phase_theta, phase_phi, freq_hz, theta_inc, phi_inc)
-    % Write Remcom UAN format per support.remcom.com documentation
+    phase_theta, phase_phi, theta_inc, phi_inc)
+    % Write Remcom Wireless InSite UAN format
     fid = fopen(filepath, 'w');
     if fid < 0
         error('snr:ant:uan:writeFailed', 'Cannot open file: %s', filepath);
     end
 
-    theta_min = 0;
-    theta_max = 180;
-    phi_min = 0;
-    phi_max = 360;
+    maximum_gain = max(nanmax(g_theta), nanmax(g_phi));
+    phi_max = 360 - phi_inc;
 
-    % UAN header
-    fprintf(fid, 'theta_min %g\n', theta_min);
-    fprintf(fid, 'theta_max %g\n', theta_max);
-    fprintf(fid, 'theta_inc %g\n', theta_inc);
-    fprintf(fid, 'phi_min %g\n', phi_min);
-    fprintf(fid, 'phi_max %g\n', phi_max);
-    fprintf(fid, 'phi_inc %g\n', phi_inc);
+    % UAN header (Wireless InSite format)
+    fprintf(fid, 'begin_<parameters> \n');
+    fprintf(fid, 'format free\n');
+    fprintf(fid, 'phi_min 0.000000\n');
+    fprintf(fid, 'phi_max %.6f\n', phi_max);
+    fprintf(fid, 'phi_inc %.6f\n', phi_inc);
+    fprintf(fid, 'theta_min 0.000000\n');
+    fprintf(fid, 'theta_max 180.0000\n');
+    fprintf(fid, 'theta_inc %.6f\n', theta_inc);
     fprintf(fid, 'complex\n');
+    fprintf(fid, 'mag_phase\n');
     fprintf(fid, 'pattern gain\n');
     fprintf(fid, 'magnitude dB\n');
+    fprintf(fid, 'maximum_gain %.6f\n', maximum_gain);
     fprintf(fid, 'phase degrees\n');
     fprintf(fid, 'direction degrees\n');
-    fprintf(fid, 'frequencyHz %g\n', freq_hz);
     fprintf(fid, 'polarization theta_phi\n');
-    fprintf(fid, 'NetInputPower 1\n');
-    fprintf(fid, 'ReferencePoint 0 0 0\n');
-    fprintf(fid, '# theta phi G_theta_dB G_phi_dB phase_theta_deg phase_phi_deg\n');
+    fprintf(fid, 'end_<parameters>\n');
 
     % Data rows: theta, phi, G_theta, G_phi, phase_theta, phase_phi
     for i = 1:numel(theta)
-        fprintf(fid, '%g %g %g %g %g %g\n', ...
+        fprintf(fid, '%.6f  %.6f  %.6f  %.6f  %.6f  %.6f\n', ...
             theta(i), phi(i), g_theta(i), g_phi(i), ...
             phase_theta(i), phase_phi(i));
     end
