@@ -3,10 +3,14 @@ UAN EXPORT FOR REMCOM WIRELESS INSITE:
   for use in propagation modeling. Use either:
     - MATLAB: antenna_gain_to_uan('TRM55971.00', 'NONE', 'L1', 'RHCP')
     - Python: python tools/antenna_gain_to_uan.py TRM55971.00 NONE L1 RHCP
-  Pre-converted examples: TRM29659.00_L1_RHCP.uan, TRM55971.00_L1_RHCP.uan
+  Pre-converted examples: TRM29659.00_L1_RHCP.uan, TRM55971.00_L1_RHCP.uan,
+  TRM59800.00_L1_RHCP.uan, TRM59800.00_L1_LHCP.uan
   Phase: When PHASE.DAT exists (e.g. MONOL14R), measured phase is used.
   Otherwise, circular polarization phase is derived: phase_phi - phase_theta =
   90 deg (RHCP) or -90 deg (LHCP).
+  To build PHASE.DAT from an ANTEX .atx file (PCO+PCV), use:
+    python tools/atx_phase_to_profile.py <path/to/file.atx> <model> NONE L1 -o lib/snr/data/ant/profile
+  See gemini-phase.md for the phase formula.
 
 The "profile" subdirectory is the only one input by the user.  The "densemap" and "sphharm" subdirectories are produced by the routine snr_setup_ant_gain_preload.m
 

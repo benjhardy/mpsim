@@ -65,7 +65,7 @@ def write_uan(filepath, theta, phi, gain_db, phase_deg, freq_hz, polarization='R
     Write Remcom Wireless InSite UAN format.
     For circular polarization (RHCP/LHCP), split gain -3dB between theta and phi.
     Phase: use phase_deg if provided (from PHASE.DAT), else derive from polarization.
-    For RHCP: phase_phi - phase_theta = 90°; for LHCP: -90°.
+    For Remcom/IEEE: RHCP phase_phi - phase_theta = -90°; LHCP = +90°.
     """
     import numpy as np
 
@@ -73,15 +73,17 @@ def write_uan(filepath, theta, phi, gain_db, phase_deg, freq_hz, polarization='R
     gain_theta_db = gain_db - 3.0
     gain_phi_db = gain_db - 3.0
 
-    # Phase: theta-phi relationship for circular polarization
+    # Phase: theta-phi relationship for circular polarization.
+    # IEEE/Remcom: RHCP = E_theta - j*E_phi => phase_phi lags theta by 90° (phase_phi - phase_theta = -90°).
+    # So RHCP: phase_phi = phase_theta - 90°; LHCP: phase_phi = phase_theta + 90°.
     if phase_deg is not None:
         # Use measured phase for both components (phase pattern from file)
         phase_theta = np.asarray(phase_deg, dtype=float)
-        phase_phi = phase_theta + (90.0 if polarization.upper() == 'RHCP' else -90.0)
+        phase_phi = phase_theta + (-90.0 if polarization.upper() == 'RHCP' else 90.0)
     else:
         # No phase data: derive from polarization convention
         phase_theta = np.zeros_like(gain_db)
-        phase_phi = np.full_like(gain_db, 90.0 if polarization.upper() == 'RHCP' else -90.0)
+        phase_phi = np.full_like(gain_db, -90.0 if polarization.upper() == 'RHCP' else 90.0)
 
     theta_vals = np.unique(theta)
     phi_vals = np.unique(phi)
@@ -180,7 +182,8 @@ def main():
     if not os.path.exists(phase_filepath):
         phase_filepath = os.path.join(data_dir, phase_filename + '.DATX')
     if os.path.exists(phase_filepath):
-        _, _, phase_deg, _ = load_gain_profile(phase_filepath)  # same format as gain
+        theta_phase, _, phase_vals, _ = load_gain_profile(phase_filepath)  # same format as gain
+        phase_deg = phase_vals
 
     # Check if azimuth-symmetric (single phi value or all same)
     phi_unique = len(set(phi_deg.round(2)))
@@ -190,7 +193,10 @@ def main():
         gain_unique = np.array([np.mean(gain_db[idx == i]) for i in range(len(theta_unique))])
         theta_deg, phi_deg, gain_db = expand_azimuth_symmetric(theta_unique, gain_unique)
         if phase_deg is not None:
-            phase_unique = np.array([np.mean(phase_deg[idx == i]) for i in range(len(theta_unique))])
+            # Phase may be on a different theta grid (e.g. 0:5:180); interpolate onto theta_unique
+            theta_phase_u = np.unique(theta_phase)
+            phase_at_unique = np.array([np.mean(phase_deg[theta_phase == t]) for t in theta_phase_u])
+            phase_unique = np.interp(theta_unique, theta_phase_u, phase_at_unique)
             _, _, phase_deg = expand_azimuth_symmetric(theta_unique, phase_unique)
 
     freq_hz = FREQUENCIES.get(args.freq.upper(), FREQUENCIES['L1'])
