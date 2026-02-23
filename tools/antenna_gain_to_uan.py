@@ -60,18 +60,28 @@ def load_gain_profile(filepath):
     return theta_deg, phi_deg, gain_db, delta
 
 
-def write_uan(filepath, theta, phi, gain_db, freq_hz, polarization='RHCP'):
+def write_uan(filepath, theta, phi, gain_db, phase_deg, freq_hz, polarization='RHCP'):
     """
     Write Remcom Wireless InSite UAN format.
     For circular polarization (RHCP/LHCP), split gain -3dB between theta and phi.
+    Phase: use phase_deg if provided (from PHASE.DAT), else derive from polarization.
+    For RHCP: phase_phi - phase_theta = 90°; for LHCP: -90°.
     """
     import numpy as np
 
     # For circular pol: equal power in theta and phi components
     gain_theta_db = gain_db - 3.0
     gain_phi_db = gain_db - 3.0
-    phase_theta = np.zeros_like(gain_db)
-    phase_phi = np.zeros_like(gain_db)
+
+    # Phase: theta-phi relationship for circular polarization
+    if phase_deg is not None:
+        # Use measured phase for both components (phase pattern from file)
+        phase_theta = np.asarray(phase_deg, dtype=float)
+        phase_phi = phase_theta + (90.0 if polarization.upper() == 'RHCP' else -90.0)
+    else:
+        # No phase data: derive from polarization convention
+        phase_theta = np.zeros_like(gain_db)
+        phase_phi = np.full_like(gain_db, 90.0 if polarization.upper() == 'RHCP' else -90.0)
 
     theta_vals = np.unique(theta)
     phi_vals = np.unique(phi)
@@ -152,16 +162,25 @@ def main():
         data_dir = os.path.join(script_dir, '..', 'lib', 'snr', 'data', 'ant', 'profile')
     data_dir = os.path.normpath(data_dir)
 
-    filename = f'{args.model}__{args.radome}__{args.freq}__{args.polar}__GAIN'
-    filepath = os.path.join(data_dir, filename + '.DAT')
-    if not os.path.exists(filepath):
-        filepath = os.path.join(data_dir, filename + '.DATX')
-    if not os.path.exists(filepath):
-        print(f'Error: Antenna file not found: {filename}.DAT or .DATX', file=sys.stderr)
+    gain_filename = f'{args.model}__{args.radome}__{args.freq}__{args.polar}__GAIN'
+    gain_filepath = os.path.join(data_dir, gain_filename + '.DAT')
+    if not os.path.exists(gain_filepath):
+        gain_filepath = os.path.join(data_dir, gain_filename + '.DATX')
+    if not os.path.exists(gain_filepath):
+        print(f'Error: Antenna file not found: {gain_filename}.DAT or .DATX', file=sys.stderr)
         print(f'  Looked in: {data_dir}', file=sys.stderr)
         sys.exit(1)
 
-    theta_deg, phi_deg, gain_db, delta = load_gain_profile(filepath)
+    theta_deg, phi_deg, gain_db, delta = load_gain_profile(gain_filepath)
+
+    # Load phase if available (optional - most antennas have gain only)
+    phase_deg = None
+    phase_filename = f'{args.model}__{args.radome}__{args.freq}__{args.polar}__PHASE'
+    phase_filepath = os.path.join(data_dir, phase_filename + '.DAT')
+    if not os.path.exists(phase_filepath):
+        phase_filepath = os.path.join(data_dir, phase_filename + '.DATX')
+    if os.path.exists(phase_filepath):
+        _, _, phase_deg, _ = load_gain_profile(phase_filepath)  # same format as gain
 
     # Check if azimuth-symmetric (single phi value or all same)
     phi_unique = len(set(phi_deg.round(2)))
@@ -170,6 +189,9 @@ def main():
         theta_unique, idx = np.unique(theta_deg, return_inverse=True)
         gain_unique = np.array([np.mean(gain_db[idx == i]) for i in range(len(theta_unique))])
         theta_deg, phi_deg, gain_db = expand_azimuth_symmetric(theta_unique, gain_unique)
+        if phase_deg is not None:
+            phase_unique = np.array([np.mean(phase_deg[idx == i]) for i in range(len(theta_unique))])
+            _, _, phase_deg = expand_azimuth_symmetric(theta_unique, phase_unique)
 
     freq_hz = FREQUENCIES.get(args.freq.upper(), FREQUENCIES['L1'])
 
@@ -180,7 +202,7 @@ def main():
     if not outpath.endswith('.uan'):
         outpath += '.uan'
 
-    write_uan(outpath, theta_deg, phi_deg, gain_db, freq_hz, args.polar)
+    write_uan(outpath, theta_deg, phi_deg, gain_db, phase_deg, freq_hz, args.polar)
     print(f'Wrote: {outpath}')
 
 

@@ -4,6 +4,9 @@ UAN EXPORT FOR REMCOM WIRELESS INSITE:
     - MATLAB: antenna_gain_to_uan('TRM55971.00', 'NONE', 'L1', 'RHCP')
     - Python: python tools/antenna_gain_to_uan.py TRM55971.00 NONE L1 RHCP
   Pre-converted examples: TRM29659.00_L1_RHCP.uan, TRM55971.00_L1_RHCP.uan
+  Phase: When PHASE.DAT exists (e.g. MONOL14R), measured phase is used.
+  Otherwise, circular polarization phase is derived: phase_phi - phase_theta =
+  90 deg (RHCP) or -90 deg (LHCP).
 
 The "profile" subdirectory is the only one input by the user.  The "densemap" and "sphharm" subdirectories are produced by the routine snr_setup_ant_gain_preload.m
 

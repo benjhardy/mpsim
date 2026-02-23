@@ -45,6 +45,13 @@ function antenna_gain_to_uan (model, radome, freq_name, polar, varargin)
 
     profile = snr_setup_ant_profile_load(filepath, 'gain');
 
+    % Load phase if available (optional - most antennas have gain only)
+    phase_profile = [];
+    phase_filepath = strrep(filepath, 'GAIN', 'PHASE');
+    if exist(phase_filepath, 'file')
+        phase_profile = snr_setup_ant_profile_load(phase_filepath, 'phase');
+    end
+
     % Get frequency in Hz for UAN header
     freq_hz = get_frequency_hz(freq_name);
 
@@ -75,8 +82,17 @@ function antenna_gain_to_uan (model, radome, freq_name, polar, varargin)
     % components. Equal power split: -3 dB each.
     gain_theta_db = gain_grid - 3;
     gain_phi_db = gain_grid - 3;
-    phase_theta_deg = zeros(size(gain_grid));
-    phase_phi_deg = zeros(size(gain_grid));
+
+    % Phase: use PHASE.DAT if available, else derive from polarization.
+    % For circular pol: phase_phi - phase_theta = 90° (RHCP) or -90° (LHCP).
+    if ~isempty(phase_profile)
+        phase_grid = interp_phase_to_grid(phase_profile, theta_grid, phi_grid);
+        phase_theta_deg = phase_grid;
+        phase_phi_deg = phase_grid + (90 * strcmpi(polar, 'RHCP') - 90 * strcmpi(polar, 'LHCP'));
+    else
+        phase_theta_deg = zeros(size(gain_grid));
+        phase_phi_deg = repmat(90 * (2*strcmpi(polar, 'RHCP') - 1), size(gain_grid));
+    end
 
     % Determine angle increments for UAN header
     theta_vals = unique(theta_grid);
@@ -131,6 +147,20 @@ function [theta_grid, phi_grid, gain_grid] = expand_profile_to_grid(profile)
     F = scatteredInterpolant(theta_deg, phi_deg, profile.gain_db, ...
         'linear', 'nearest');
     gain_grid = F(theta_grid, phi_grid);
+end
+
+function phase_grid = interp_phase_to_grid(phase_profile, theta_grid, phi_grid)
+    theta_deg = phase_profile.ang;
+    phi_deg = phase_profile.azim;
+    phase_val = phase_profile.final;
+    if isscalar(unique(phi_deg)) || numel(unique(phi_deg)) < 3
+        phase_grid = interp1(theta_deg, phase_val, theta_grid, 'linear', 'extrap');
+    else
+        theta_deg = 90 - phase_profile.elev;
+        phi_deg = mod(phase_profile.azim, 360);
+        F = scatteredInterpolant(theta_deg, phi_deg, phase_val, 'linear', 'nearest');
+        phase_grid = F(theta_grid, phi_grid);
+    end
 end
 
 function write_uan_file(filepath, theta, phi, g_theta, g_phi, ...
